@@ -1,4 +1,4 @@
-# InDEXt Loader
+# InDEX-transformer Loader
 
 Offline LLM inference utility for legacy Android devices (**Android 2.3 – 4.4**, API 9–19), built without Android Studio using a pure C99 + ARM NEON runtime and native Android SDK UI.
 
