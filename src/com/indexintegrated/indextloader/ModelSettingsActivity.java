@@ -15,9 +15,9 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 public class ModelSettingsActivity extends Activity {
-    private Spinner spThreads, spCtx, spMaxTok, spMode;
+    private Spinner spThreads, spCtx, spKvMode, spMaxTok, spMode;
     private EditText etTemp, etTopP, etTopK, etRepPen, etSeed, etSysPrompt;
-    private CheckBox cbAddBos, cbKeepKv;
+    private CheckBox cbAddBos, cbKeepKv, cbUseMmap;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -41,11 +41,26 @@ public class ModelSettingsActivity extends Activity {
         spThreads = UiHelper.makeSpinnerRow(this, root, "CPU Threads", new String[] { "Auto", "1", "2", "4", "6", "8" }, p.getInt(AppState.KEY_THREADS, 0), colorPrimary);
         spCtx = UiHelper.makeSpinnerRow(this, root, "Context Length (on load)", new String[] { "Model Default", "128", "256", "512", "1024", "2048" }, p.getInt(AppState.KEY_CTX, 0), colorPrimary);
 
+        cbUseMmap = UiHelper.makeCheck(this, root, "Use mmap (zero-copy, on load)", p.getBoolean(AppState.KEY_USE_MMAP, true));
+        spKvMode = UiHelper.makeSpinnerRow(this, root, "KV Cache (on load)", new String[] { "FP32 (Full)", "FP16 (2x less RAM)", "Q8_0 (4x less RAM)", "Q4_0 (8x less RAM)" }, p.getInt(AppState.KEY_KV_MODE, 2), colorPrimary);
         cbAddBos = UiHelper.makeCheck(this, root, "Prepend BOS token", p.getBoolean(AppState.KEY_ADD_BOS, true));
         cbKeepKv = UiHelper.makeCheck(this, root, "Keep KV cache between turns", p.getBoolean(AppState.KEY_KEEP_KV, true));
 
         root.addView(UiHelper.sectionHeader(this, "GENERATION & SAMPLING", colorSecondary));
-        spMode = UiHelper.makeSpinnerRow(this, root, "Prompt Mode", new String[] { "Completion", "Chat (<|user|> / <|assistant|>)" }, p.getInt(AppState.KEY_CHAT_MODE, 0), colorPrimary);
+        spMode = UiHelper.makeSpinnerRow(
+            this, root, "Chat Template",
+            new String[] {
+                "Completion (Raw)",
+                "Auto Chat (GGUF / <|user|>)",
+                "ChatML (<|im_start|>)",
+                "LLaMA 3 (<|start_header_id|>)",
+                "Gemma (<start_of_turn>)",
+                "Alpaca (### Instruction:)",
+                "Phi / Zephyr (<|user|>\\n)",
+                "Mistral ([INST])"
+            },
+            p.getInt(AppState.KEY_CHAT_MODE, 0), colorPrimary
+        );
         spMaxTok = UiHelper.makeSpinnerRow(this, root, "Max New Tokens", new String[] { "64", "128", "256", "512", "1024" }, p.getInt(AppState.KEY_MAX_TOKENS, 1), colorPrimary);
         etTemp = UiHelper.makeEditRow(this, root, "Temperature (0 = greedy)", p.getString(AppState.KEY_TEMP, "0.7"), colorPrimary);
         etTopP = UiHelper.makeEditRow(this, root, "Top-P", p.getString(AppState.KEY_TOP_P, "0.9"), colorPrimary);
@@ -108,6 +123,8 @@ public class ModelSettingsActivity extends Activity {
             .putString(AppState.KEY_REPEAT_PEN, etRepPen.getText().toString().trim())
             .putString(AppState.KEY_SEED, etSeed.getText().toString().trim())
             .putString(AppState.KEY_SYS_PROMPT, etSysPrompt.getText().toString())
+            .putBoolean(AppState.KEY_USE_MMAP, cbUseMmap.isChecked())
+            .putInt(AppState.KEY_KV_MODE, spKvMode.getSelectedItemPosition())
             .putBoolean(AppState.KEY_ADD_BOS, cbAddBos.isChecked())
             .putBoolean(AppState.KEY_KEEP_KV, cbKeepKv.isChecked())
             .commit();

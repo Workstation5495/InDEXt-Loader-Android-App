@@ -13,7 +13,7 @@ static int on_token(const char *piece, int token_id, void *user_data) {
 
 int main(int argc, char **argv) {
     if (argc < 2) {
-        printf("Usage: %s <model.idxt|model.gguf> [tokenizer.json] [prompt]\n", argv[0]);
+        printf("Usage: %s <model.idxt|model.gguf> [tokenizer.json] [prompt] [add_bos] [use_mmap] [use_fp16_kv]\n", argv[0]);
         return 1;
     }
     const char *model_path = argv[1];
@@ -25,6 +25,8 @@ int main(int argc, char **argv) {
     IndextParams p = indext_default_params();
     p.temperature = 0.0f; /* greedy for deterministic verification */
     p.max_tokens = 48;
+    if (argc >= 6) p.use_mmap = atoi(argv[5]);
+    if (argc >= 7) p.kv_mode = atoi(argv[6]);
 
     char err[512] = {0};
     IndextContext *ctx = indext_load(model_path, tok_path, &p, err, sizeof(err));
@@ -35,8 +37,10 @@ int main(int argc, char **argv) {
 
     IndextModelInfo info;
     indext_get_info(ctx, &info);
-    printf("[Loaded] fmt=%d arch=%s dim=%u layers=%u heads=%u kv_heads=%u vocab=%u ctx=%u\n",
-           info.format, info.arch, info.dim, info.n_layers, info.n_heads, info.n_kv_heads, info.vocab_size, info.max_seq_len);
+    printf("[Loaded] fmt=%d v=%d arch=%s dim=%u layers=%u heads=%u kv_heads=%u vocab=%u ctx=%u mmap=%d kv_mode=%d kv_mb=%.2f\n",
+           info.format, info.idxt_version, info.arch, info.dim, info.n_layers, info.n_heads, info.n_kv_heads,
+           info.vocab_size, info.max_seq_len, info.used_mmap, info.kv_mode,
+           (double)info.kv_cache_bytes / (1024.0 * 1024.0));
 
     printf("Prompt: %s", prompt);
     fflush(stdout);

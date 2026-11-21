@@ -22,6 +22,8 @@ public final class AppState {
     public static final String KEY_TOP_K        = "top_k";
     public static final String KEY_REPEAT_PEN   = "repeat_penalty";
     public static final String KEY_SEED         = "seed";
+    public static final String KEY_USE_MMAP     = "use_mmap";
+    public static final String KEY_KV_MODE      = "kv_mode"; // 0=FP32, 1=FP16, 2=Q8_0
     public static final String KEY_CHAT_MODE    = "chat_mode";
     public static final String KEY_SYS_PROMPT   = "sys_prompt";
     public static final String KEY_ADD_BOS      = "add_bos";
@@ -32,6 +34,7 @@ public final class AppState {
     public static final String KEY_KEEP_SCREEN  = "keep_screen_on";
     public static final String KEY_TIMESTAMPS   = "show_timestamps";
     public static final String KEY_MEM_WARN     = "mem_warn_toast";
+    public static final String KEY_LOAD_DIAG    = "load_diag_toast";
     public static final String KEY_CONFIRM_UNLOAD = "confirm_unload";
     public static final String KEY_DEFAULT_DIR  = "default_dir_mode"; // 0=Download, 1=SDCard, 2=LastUsed
     public static final String KEY_LAST_DIR     = "last_picker_dir";

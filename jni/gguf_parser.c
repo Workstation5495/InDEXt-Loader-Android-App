@@ -189,6 +189,10 @@ GgufFile *gguf_parse_memory(const uint8_t *base, size_t size, char *err_buf, siz
             rd_num_as_f32(&r, vtype, &gf->rms_eps);
         } else if (ends_with(key, ".rope.freq_base")) {
             rd_num_as_f32(&r, vtype, &gf->rope_freq_base);
+        } else if (ends_with(key, ".attn_logit_softcapping")) {
+            rd_num_as_f32(&r, vtype, &gf->attn_logit_softcapping);
+        } else if (ends_with(key, ".final_logit_softcapping")) {
+            rd_num_as_f32(&r, vtype, &gf->final_logit_softcapping);
         } else if (strcmp(key, "tokenizer.ggml.model") == 0 && vtype == GGUF_TYPE_STRING) {
             char *s = rd_str(&r);
             if (s) {

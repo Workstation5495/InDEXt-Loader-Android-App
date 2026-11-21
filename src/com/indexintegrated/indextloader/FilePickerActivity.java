@@ -24,12 +24,14 @@ import java.util.Locale;
 
 public class FilePickerActivity extends Activity {
     public static final String EXTRA_EXT_FILTER = "ext_filter";
+    public static final String EXTRA_PICK_DIR = "pick_dir";
     public static final String EXTRA_SELECTED_PATH = "selected_path";
 
     private TextView pathView;
     private ListView listView;
     private File currentDir;
     private String[] extFilter;
+    private boolean pickDir = false;
     private final List<File> entries = new ArrayList<File>();
 
     private int colorPrimary;
@@ -42,6 +44,9 @@ public class FilePickerActivity extends Activity {
 
         colorPrimary = AppState.getThemeColor(this, android.R.attr.textColorPrimary, 0xFFFFFFFF);
         colorSecondary = AppState.getThemeColor(this, android.R.attr.textColorSecondary, 0xFFAAAAAA);
+
+        pickDir = getIntent().getBooleanExtra(EXTRA_PICK_DIR, false);
+        if (pickDir) setTitle("Select Folder");
 
         String filterStr = getIntent().getStringExtra(EXTRA_EXT_FILTER);
         if (filterStr != null && filterStr.length() > 0) {
@@ -74,6 +79,24 @@ public class FilePickerActivity extends Activity {
 
         listView = new ListView(this);
         root.addView(listView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1.0f));
+
+        if (pickDir) {
+            Button btnSelectDir = new Button(this);
+            btnSelectDir.setText("Use This Folder");
+            btnSelectDir.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    if (currentDir != null) {
+                        Intent out = new Intent();
+                        out.putExtra(EXTRA_SELECTED_PATH, currentDir.getAbsolutePath());
+                        setResult(RESULT_OK, out);
+                        finish();
+                    }
+                }
+            });
+            root.addView(btnSelectDir, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        }
+
         setContentView(root);
 
         File sd = Environment.getExternalStorageDirectory();
@@ -119,7 +142,7 @@ public class FilePickerActivity extends Activity {
                 File f = entries.get(position);
                 if (f.isDirectory()) {
                     loadDir(f);
-                } else {
+                } else if (!pickDir) {
                     Intent out = new Intent();
                     out.putExtra(EXTRA_SELECTED_PATH, f.getAbsolutePath());
                     setResult(RESULT_OK, out);
@@ -173,11 +196,13 @@ public class FilePickerActivity extends Activity {
         entries.clear();
         for (File f : raw) {
             if (f.getName().startsWith(".")) continue;
-            if (f.isDirectory() || matchesFilter(f.getName()) || extFilter == null) {
+            if (pickDir) {
+                if (f.isDirectory()) entries.add(f);
+            } else if (f.isDirectory() || matchesFilter(f.getName()) || extFilter == null) {
                 entries.add(f);
             }
         }
-        if (entries.isEmpty() && raw.length > 0) {
+        if (!pickDir && entries.isEmpty() && raw.length > 0) {
             for (File f : raw) {
                 if (!f.getName().startsWith(".")) entries.add(f);
             }

@@ -42,7 +42,8 @@ Java_com_indexintegrated_indextloader_NativeEngine_nativeLoadModel(
     JNIEnv *env, jclass cls,
     jstring jmodel, jstring jtok,
     jint n_threads, jint n_ctx, jint max_tokens,
-    jfloat temp, jfloat top_p, jint top_k, jfloat repeat_penalty, jint seed
+    jfloat temp, jfloat top_p, jint top_k, jfloat repeat_penalty, jint seed,
+    jboolean use_mmap, jint kv_mode
 ) {
     (void)cls;
     g_last_error[0] = '\0';
@@ -58,6 +59,8 @@ Java_com_indexintegrated_indextloader_NativeEngine_nativeLoadModel(
     p.top_k = (int)top_k;
     p.repeat_penalty = (float)repeat_penalty;
     p.seed = (int)seed;
+    p.use_mmap = use_mmap ? 1 : 0;
+    p.kv_mode = (int)kv_mode;
 
     IndextContext *ctx = indext_load(model_path, tok_path, &p, g_last_error, sizeof(g_last_error));
 
@@ -113,9 +116,10 @@ Java_com_indexintegrated_indextloader_NativeEngine_nativeGetModelInfo(JNIEnv *en
     if (!ctx) return (*env)->NewStringUTF(env, "");
     IndextModelInfo info;
     indext_get_info(ctx, &info);
+    const char *fmt_str = (info.format == INDEXT_FMT_IDXT) ? "IDXT" : "GGUF";
     char buf[512];
-    snprintf(buf, sizeof(buf), "%s|%s|%u|%u|%u|%u|%u|%u|%.2f|%.2f|%d",
-             (info.format == INDEXT_FMT_IDXT) ? "IDXT" : "GGUF",
+    snprintf(buf, sizeof(buf), "%s|%s|%u|%u|%u|%u|%u|%u|%.2f|%.2f|%d|%d|%d",
+             fmt_str,
              info.arch,
              info.vocab_size,
              info.dim,
@@ -125,7 +129,9 @@ Java_com_indexintegrated_indextloader_NativeEngine_nativeGetModelInfo(JNIEnv *en
              info.max_seq_len,
              (double)info.file_size / (1024.0 * 1024.0),
              (double)info.kv_cache_bytes / (1024.0 * 1024.0),
-             info.is_chatml);
+             info.is_chatml,
+             info.used_mmap,
+             info.kv_mode);
     return (*env)->NewStringUTF(env, buf);
 }
 

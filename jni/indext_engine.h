@@ -15,14 +15,16 @@ typedef enum {
 } IndextFormat;
 
 typedef struct {
-    int n_threads;      /* 0 = auto */
-    int n_ctx;          /* 0 = model default */
-    int max_tokens;     /* max new tokens per turn */
-    float temperature;  /* 0.0 = greedy */
-    float top_p;        /* 0.0..1.0 */
-    int top_k;          /* <=0 disabled */
+    int n_threads;        /* 0 = auto */
+    int n_ctx;            /* 0 = model default */
+    int max_tokens;       /* max new tokens per turn */
+    float temperature;    /* 0.0 = greedy */
+    float top_p;          /* 0.0..1.0 */
+    int top_k;            /* <=0 disabled */
     float repeat_penalty; /* 1.0 = disabled */
-    int seed;           /* 0 = time-based */
+    int seed;             /* 0 = time-based */
+    int use_mmap;         /* 1 = mmap (zero-copy), 0 = read into RAM */
+    int kv_mode;          /* 0 = FP32, 1 = FP16, 2 = Q8_0, 3 = Q4_0 */
 } IndextParams;
 
 typedef struct {
@@ -43,6 +45,10 @@ typedef struct {
     int eos_id;
     int add_bos_default;
     int is_chatml;
+    int idxt_version;
+    int used_mmap;
+    int kv_mode;
+    uint32_t quant_type;
     size_t file_size;
     size_t kv_cache_bytes;
 } IndextModelInfo;
@@ -63,7 +69,7 @@ typedef struct IndextContext IndextContext;
 
 IndextParams indext_default_params(void);
 
-/* Load IDXT (requires tokenizer_path) or GGUF (tokenizer_path may be NULL). */
+/* Load IDXT (v1/v2, requires tokenizer_path) or GGUF (tokenizer_path may be NULL). */
 IndextContext *indext_load(
     const char *model_path,
     const char *tokenizer_path,

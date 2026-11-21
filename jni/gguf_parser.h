@@ -17,6 +17,8 @@ typedef enum {
     GGML_T_Q5_0 = 6,
     GGML_T_Q5_1 = 7,
     GGML_T_Q8_0 = 8,
+    GGML_T_Q2_K = 10,
+    GGML_T_Q3_K = 11,
     GGML_T_Q4_K = 12,
     GGML_T_Q5_K = 13,
     GGML_T_Q6_K = 14,
@@ -48,6 +50,8 @@ typedef struct {
     uint32_t max_seq_len;
     float rms_eps;
     float rope_freq_base;
+    float attn_logit_softcapping;
+    float final_logit_softcapping;
 
     int bos_id;
     int eos_id;

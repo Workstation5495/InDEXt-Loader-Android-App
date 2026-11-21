@@ -141,7 +141,16 @@ public final class UiHelper {
             sb.append("Heads: ").append(inf[5]).append(" (KV: ").append(inf[6]).append(")\n");
             sb.append("Context: ").append(inf[7]).append("\n");
             sb.append("File Size: ").append(inf[8]).append(" MB\n");
-            sb.append("KV Cache: ").append(inf[9]).append(" MB");
+            String kvMode = "FP32";
+            if (inf.length >= 13) {
+                if ("1".equals(inf[12])) kvMode = "FP16";
+                else if ("2".equals(inf[12])) kvMode = "Q8_0";
+                else if ("3".equals(inf[12])) kvMode = "Q4_0";
+            }
+            sb.append("KV Cache: ").append(inf[9]).append(" MB (").append(kvMode).append(")\n");
+            if (inf.length >= 12) {
+                sb.append("Storage Mode: ").append("1".equals(inf[11]) ? "mmap (zero-copy)" : "RAM buffer");
+            }
         }
         new AlertDialog.Builder(act)
             .setTitle("Model Info")

@@ -69,7 +69,7 @@ public class MainActivity extends Activity {
         selectedModelPath = p.getString(AppState.KEY_MODEL_PATH, "");
         selectedTokPath = p.getString(AppState.KEY_TOK_PATH, "");
 
-        UiHelper.setActionBarSubtitle(this, welcomeDone ? "2026.0.0" : null);
+        UiHelper.setActionBarSubtitle(this, welcomeDone ? "26.0.1" : null);
 
         rootFrame = new FrameLayout(this);
         buildWelcomeView();
@@ -158,6 +158,22 @@ public class MainActivity extends Activity {
         View spacer = new View(this);
         box.addView(spacer, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1.0f));
 
+        LinearLayout linkBtns = new LinearLayout(this);
+        linkBtns.setOrientation(LinearLayout.HORIZONTAL);
+        Button btnGh = new Button(this);
+        btnGh.setText("GitHub");
+        btnGh.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { AboutActivity.openUrl(MainActivity.this, AboutActivity.GITHUB_URL); }
+        });
+        Button btnHf = new Button(this);
+        btnHf.setText("HuggingFace");
+        btnHf.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { AboutActivity.openUrl(MainActivity.this, AboutActivity.HF_URL); }
+        });
+        linkBtns.addView(btnGh, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f));
+        linkBtns.addView(btnHf, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f));
+        box.addView(linkBtns, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
         LinearLayout startBtns = new LinearLayout(this);
         startBtns.setOrientation(LinearLayout.HORIZONTAL);
 
@@ -178,7 +194,7 @@ public class MainActivity extends Activity {
                 AppState.prefs(MainActivity.this).edit().putBoolean(AppState.KEY_WELCOME_DONE, true).commit();
                 welcomeScroll.setVisibility(View.GONE);
                 loaderContainer.setVisibility(View.VISIBLE);
-                UiHelper.setActionBarSubtitle(MainActivity.this, "2026.0.0");
+                UiHelper.setActionBarSubtitle(MainActivity.this, "26.0.1");
                 if (Build.VERSION.SDK_INT >= 11) invalidateOptionsMenu();
                 Toast.makeText(MainActivity.this, "Select a model file to get started.", Toast.LENGTH_LONG).show();
             }
@@ -471,6 +487,9 @@ public class MainActivity extends Activity {
         final int topK = AppState.parseIntSafe(p.getString(AppState.KEY_TOP_K, "40"), 40);
         final float repPen = AppState.parseFloatSafe(p.getString(AppState.KEY_REPEAT_PEN, "1.1"), 1.1f);
         final int seed = AppState.parseIntSafe(p.getString(AppState.KEY_SEED, "0"), 0);
+        final boolean useMmap = p.getBoolean(AppState.KEY_USE_MMAP, true);
+        final int kvMode = p.getInt(AppState.KEY_KV_MODE, 2);
+        final boolean showDiag = p.getBoolean(AppState.KEY_LOAD_DIAG, true);
         final String tokArg = (isIdxt && selectedTokPath.length() > 0) ? selectedTokPath : null;
 
         final ProgressDialog dlg = new ProgressDialog(this);
@@ -483,10 +502,11 @@ public class MainActivity extends Activity {
             public void run() {
                 AppState.releaseEngine();
                 final long h = NativeEngine.nativeLoadModel(
-                    selectedModelPath, tokArg, nThreads, nCtx, maxTok, temp, topP, topK, repPen, seed
+                    selectedModelPath, tokArg, nThreads, nCtx, maxTok, temp, topP, topK, repPen, seed, useMmap, kvMode
                 );
                 final String err = (h == 0) ? NativeEngine.nativeGetLastError() : "";
                 final String info = (h != 0) ? NativeEngine.nativeGetModelInfo(h) : "";
+                final String stats = (h != 0) ? NativeEngine.nativeGetLastStats(h) : "";
                 handler.post(new Runnable() {
                     @Override
                     public void run() {
@@ -504,6 +524,24 @@ public class MainActivity extends Activity {
                             AppState.loadedModelName = new File(selectedModelPath).getName();
                             AppState.loadedModelInfo = info;
                             updateLiveModelBar();
+                            if (showDiag) {
+                                String[] inf = info.split("\\|");
+                                String[] st = stats.split("\\|");
+                                String loadMs = st.length >= 3 ? st[2] : "?";
+                                String mmapTxt = (inf.length >= 12 && "1".equals(inf[11])) ? "mmap" : "RAM";
+                                String kvTxt = "FP32 KV";
+                                if (inf.length >= 13) {
+                                    if ("1".equals(inf[12])) kvTxt = "FP16 KV";
+                                    else if ("2".equals(inf[12])) kvTxt = "Q8_0 KV";
+                                    else if ("3".equals(inf[12])) kvTxt = "Q4_0 KV";
+                                }
+                                String kvMb = inf.length >= 10 ? inf[9] : "?";
+                                Toast.makeText(
+                                    MainActivity.this,
+                                    "Loaded in " + loadMs + " ms (" + mmapTxt + ", " + kvTxt + " " + kvMb + " MB)",
+                                    Toast.LENGTH_LONG
+                                ).show();
+                            }
                             startActivity(new Intent(MainActivity.this, ChatActivity.class));
                         }
                     }

@@ -8,12 +8,9 @@ import android.content.SharedPreferences;
 import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.Handler;
 import android.text.ClipboardManager;
-
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.Locale;
 import android.view.Gravity;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -29,23 +26,48 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.OutputStreamWriter;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.Locale;
+
 public class ChatActivity extends Activity {
+    private static final int REQ_EXPORT_DIR = 201;
+
     private static final int MENU_CLEAR          = 1;
-    private static final int MENU_MODEL_INFO     = 2;
-    private static final int MENU_MODEL_SETTINGS = 3;
-    private static final int MENU_APP_SETTINGS   = 4;
-    private static final int MENU_UNLOAD         = 5;
-    private static final int MENU_EXIT           = 6;
+    private static final int MENU_EXPORT         = 2;
+    private static final int MENU_MODEL_INFO     = 3;
+    private static final int MENU_MODEL_SETTINGS = 4;
+    private static final int MENU_APP_SETTINGS   = 5;
+    private static final int MENU_UNLOAD         = 6;
+    private static final int MENU_EXIT           = 7;
+
+    private static final class ChatEntry {
+        String role;
+        String text;
+        String timestamp;
+    }
 
     private LinearLayout msgList;
     private ScrollView scrollLog;
     private EditText etInput;
     private Button btnSend;
 
+    private final List<ChatEntry> chatHistory = new ArrayList<ChatEntry>();
+    private boolean pendingExportJson = false;
+
     private final Handler handler = new Handler();
     private volatile boolean isGenerating = false;
 
     private boolean appliedLightTheme;
+    private int chatModeIdx;
     private boolean chatMode;
     private boolean addBos;
     private boolean keepKv;
@@ -137,12 +159,13 @@ public class ChatActivity extends Activity {
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         if (item.getItemId() == UiHelper.MENU_OVERFLOW_ID) {
-            int[] ids = { MENU_CLEAR, MENU_MODEL_INFO, MENU_MODEL_SETTINGS, MENU_APP_SETTINGS, MENU_UNLOAD, MENU_EXIT };
-            String[] labels = { "Clear Context", "Model Info", "Model Settings", "App Settings", "Unload Model", "Exit" };
+            int[] ids = { MENU_CLEAR, MENU_EXPORT, MENU_MODEL_INFO, MENU_MODEL_SETTINGS, MENU_APP_SETTINGS, MENU_UNLOAD, MENU_EXIT };
+            String[] labels = { "Clear Context", "Export Chat", "Model Info", "Model Settings", "App Settings", "Unload Model", "Exit" };
             UiHelper.showOverflowPopup(this, ids, labels, new UiHelper.OverflowAction() {
                 @Override
                 public void onSelect(int id) {
                     if (id == MENU_CLEAR) clearContext();
+                    else if (id == MENU_EXPORT) showExportDialog();
                     else if (id == MENU_MODEL_INFO) UiHelper.showModelInfoDialog(ChatActivity.this);
                     else if (id == MENU_MODEL_SETTINGS) startActivity(new Intent(ChatActivity.this, ModelSettingsActivity.class));
                     else if (id == MENU_APP_SETTINGS) startActivity(new Intent(ChatActivity.this, AppSettingsActivity.class));
@@ -178,7 +201,8 @@ public class ChatActivity extends Activity {
 
     private void applyLiveSettings() {
         SharedPreferences p = AppState.prefs(this);
-        chatMode = (p.getInt(AppState.KEY_CHAT_MODE, 0) == 1);
+        chatModeIdx = p.getInt(AppState.KEY_CHAT_MODE, 0);
+        chatMode = (chatModeIdx != 0);
         addBos = p.getBoolean(AppState.KEY_ADD_BOS, true);
         keepKv = p.getBoolean(AppState.KEY_KEEP_KV, true);
         autoScroll = p.getBoolean(AppState.KEY_AUTO_SCROLL, true);
@@ -199,7 +223,13 @@ public class ChatActivity extends Activity {
         }
     }
 
-    private TextView addMessageItem(String role, String initialText) {
+    private TextView addMessageItem(String role, String initialText, ChatEntry entryOut) {
+        String ts = new SimpleDateFormat("HH:mm:ss", Locale.US).format(new Date());
+        entryOut.role = role;
+        entryOut.text = initialText;
+        entryOut.timestamp = ts;
+        chatHistory.add(entryOut);
+
         LinearLayout block = new LinearLayout(this);
         block.setOrientation(LinearLayout.VERTICAL);
         block.setPadding(0, dp(4), 0, dp(8));
@@ -210,8 +240,7 @@ public class ChatActivity extends Activity {
 
         TextView tvRole = new TextView(this);
         if (showTimestamps) {
-            String ts = new SimpleDateFormat("HH:mm", Locale.US).format(new Date());
-            tvRole.setText(role + " (" + ts + ")");
+            tvRole.setText(role + " (" + ts.substring(0, 5) + ")");
         } else {
             tvRole.setText(role);
         }
@@ -273,17 +302,51 @@ public class ChatActivity extends Activity {
         final String formattedPrompt;
         final TextView tvOut;
         final StringBuilder outBuf = new StringBuilder();
+        final ChatEntry outEntry = new ChatEntry();
 
         if (chatMode) {
             String[] inf = AppState.loadedModelInfo.split("\\|");
             boolean isChatML = (inf.length >= 11 && "1".equals(inf[10]));
+            int mode = (chatModeIdx == 1) ? (isChatML ? 2 : 1) : chatModeIdx;
             StringBuilder pb = new StringBuilder();
-            if (isChatML) {
+            if (mode == 2) {
                 if (!sysPromptSent && sysPrompt.length() > 0) {
                     pb.append("<|im_start|>system\n").append(sysPrompt).append("<|im_end|>\n");
                     sysPromptSent = true;
                 }
                 pb.append("<|im_start|>user\n").append(text).append("<|im_end|>\n<|im_start|>assistant\n");
+            } else if (mode == 3) {
+                if (!sysPromptSent && sysPrompt.length() > 0) {
+                    pb.append("<|start_header_id|>system<|end_header_id|>\n\n").append(sysPrompt).append("<|eot_id|>");
+                    sysPromptSent = true;
+                }
+                pb.append("<|start_header_id|>user<|end_header_id|>\n\n").append(text).append("<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n");
+            } else if (mode == 4) {
+                if (!sysPromptSent && sysPrompt.length() > 0) {
+                    pb.append("<start_of_turn>user\n").append(sysPrompt).append("\n\n").append(text).append("<end_of_turn>\n<start_of_turn>model\n");
+                    sysPromptSent = true;
+                } else {
+                    pb.append("<start_of_turn>user\n").append(text).append("<end_of_turn>\n<start_of_turn>model\n");
+                }
+            } else if (mode == 5) {
+                if (!sysPromptSent && sysPrompt.length() > 0) {
+                    pb.append(sysPrompt).append("\n\n");
+                    sysPromptSent = true;
+                }
+                pb.append("### Instruction:\n").append(text).append("\n\n### Response:\n");
+            } else if (mode == 6) {
+                if (!sysPromptSent && sysPrompt.length() > 0) {
+                    pb.append("<|system|>\n").append(sysPrompt).append("<|end|>\n");
+                    sysPromptSent = true;
+                }
+                pb.append("<|user|>\n").append(text).append("<|end|>\n<|assistant|>\n");
+            } else if (mode == 7) {
+                if (!sysPromptSent && sysPrompt.length() > 0) {
+                    pb.append("[INST] ").append(sysPrompt).append("\n\n").append(text).append(" [/INST]");
+                    sysPromptSent = true;
+                } else {
+                    pb.append("[INST] ").append(text).append(" [/INST]");
+                }
             } else {
                 if (!sysPromptSent && sysPrompt.length() > 0) {
                     pb.append(sysPrompt).append("\n");
@@ -292,12 +355,12 @@ public class ChatActivity extends Activity {
                 pb.append("<|user|>").append(text).append("<|assistant|>");
             }
             formattedPrompt = pb.toString();
-            addMessageItem("You", text);
-            tvOut = addMessageItem("Model", "");
+            addMessageItem("You", text, new ChatEntry());
+            tvOut = addMessageItem("Model", "", outEntry);
         } else {
             formattedPrompt = text;
-            addMessageItem("Prompt", text);
-            tvOut = addMessageItem("Completion", text);
+            addMessageItem("Prompt", text, new ChatEntry());
+            tvOut = addMessageItem("Completion", text, outEntry);
             outBuf.append(text);
         }
         if (autoScroll) scrollToBottom();
@@ -328,7 +391,9 @@ public class ChatActivity extends Activity {
                                 @Override
                                 public void run() {
                                     outBuf.append(fPiece);
-                                    tvOut.setText(outBuf.toString());
+                                    String full = outBuf.toString();
+                                    outEntry.text = full;
+                                    tvOut.setText(full);
                                     if (autoScroll) scrollToBottom();
                                 }
                             });
@@ -354,10 +419,96 @@ public class ChatActivity extends Activity {
         }).start();
     }
 
+    private void showExportDialog() {
+        if (chatHistory.isEmpty()) {
+            Toast.makeText(this, "Nothing to export", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        String[] options = {
+            "Save TXT to Download",
+            "Save JSON to Download",
+            "Choose Folder & Save TXT",
+            "Choose Folder & Save JSON"
+        };
+        new AlertDialog.Builder(this)
+            .setTitle("Export Chat")
+            .setItems(options, new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int which) {
+                    boolean asJson = (which == 1 || which == 3);
+                    if (which == 0 || which == 1) {
+                        File sd = Environment.getExternalStorageDirectory();
+                        if (sd == null || !sd.exists()) sd = getFilesDir();
+                        File dl = new File(sd, "Download");
+                        if (!dl.exists()) dl.mkdirs();
+                        exportChatToDir(dl, asJson);
+                    } else {
+                        pendingExportJson = asJson;
+                        Intent i = new Intent(ChatActivity.this, FilePickerActivity.class);
+                        i.putExtra(FilePickerActivity.EXTRA_PICK_DIR, true);
+                        startActivityForResult(i, REQ_EXPORT_DIR);
+                    }
+                }
+            })
+            .show();
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQ_EXPORT_DIR && resultCode == RESULT_OK && data != null) {
+            String dirPath = data.getStringExtra(FilePickerActivity.EXTRA_SELECTED_PATH);
+            if (dirPath != null && dirPath.length() > 0) {
+                exportChatToDir(new File(dirPath), pendingExportJson);
+            }
+        }
+    }
+
+    private void exportChatToDir(File dir, boolean asJson) {
+        if (dir == null) return;
+        if (!dir.exists()) dir.mkdirs();
+        String tsName = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date());
+        File outFile = new File(dir, "indext_chat_" + tsName + (asJson ? ".json" : ".txt"));
+        try {
+            String content;
+            if (asJson) {
+                JSONObject root = new JSONObject();
+                root.put("app", "InDEXt Loader 26.0.1");
+                root.put("model", AppState.loadedModelName);
+                root.put("exported_at", new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(new Date()));
+                JSONArray arr = new JSONArray();
+                for (ChatEntry e : chatHistory) {
+                    JSONObject obj = new JSONObject();
+                    obj.put("role", e.role);
+                    obj.put("timestamp", e.timestamp);
+                    obj.put("text", e.text);
+                    arr.put(obj);
+                }
+                root.put("messages", arr);
+                content = root.toString(2);
+            } else {
+                StringBuilder sb = new StringBuilder();
+                sb.append("Model: ").append(AppState.loadedModelName).append("\n\n");
+                for (ChatEntry e : chatHistory) {
+                    sb.append("[").append(e.timestamp).append("] ").append(e.role).append(":\n");
+                    sb.append(e.text).append("\n\n");
+                }
+                content = sb.toString();
+            }
+            OutputStreamWriter osw = new OutputStreamWriter(new FileOutputStream(outFile), "UTF-8");
+            osw.write(content);
+            osw.close();
+            Toast.makeText(this, "Exported: " + outFile.getAbsolutePath(), Toast.LENGTH_LONG).show();
+        } catch (Exception e) {
+            Toast.makeText(this, "Export failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+
     private void clearContext() {
         if (isGenerating) NativeEngine.nativeRequestStop(AppState.engineHandle);
         NativeEngine.nativeResetContext(AppState.engineHandle);
         msgList.removeAllViews();
+        chatHistory.clear();
         sysPromptSent = false;
         Toast.makeText(this, "Context cleared", Toast.LENGTH_SHORT).show();
     }

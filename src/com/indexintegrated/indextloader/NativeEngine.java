@@ -21,7 +21,9 @@ public final class NativeEngine {
         float topP,
         int topK,
         float repeatPenalty,
-        int seed
+        int seed,
+        boolean useMmap,
+        int kvMode
     );
 
     public static native void nativeFreeModel(long handle);

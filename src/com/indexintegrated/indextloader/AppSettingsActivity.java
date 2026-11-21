@@ -18,7 +18,7 @@ import android.widget.Toast;
 
 public class AppSettingsActivity extends Activity {
     private Spinner spFontSize, spDefaultDir;
-    private CheckBox cbAutoScroll, cbShowStats, cbTimestamps, cbKeepScreen, cbMemWarn, cbConfirmUnload, cbLightTheme;
+    private CheckBox cbAutoScroll, cbShowStats, cbTimestamps, cbKeepScreen, cbMemWarn, cbLoadDiag, cbConfirmUnload, cbLightTheme;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -56,9 +56,10 @@ public class AppSettingsActivity extends Activity {
         cbTimestamps = UiHelper.makeCheck(this, root, "Show message timestamps", p.getBoolean(AppState.KEY_TIMESTAMPS, false));
         cbKeepScreen = UiHelper.makeCheck(this, root, "Keep screen on during chat", p.getBoolean(AppState.KEY_KEEP_SCREEN, false));
 
-        root.addView(UiHelper.sectionHeader(this, "STORAGE & SAFETY", colorSecondary));
+        root.addView(UiHelper.sectionHeader(this, "STORAGE & DIAGNOSTICS", colorSecondary));
         spDefaultDir = UiHelper.makeSpinnerRow(this, root, "File Browser Start", new String[] { "Download", "SDCard Root", "Last Used" }, p.getInt(AppState.KEY_DEFAULT_DIR, 0), colorPrimary);
         cbMemWarn = UiHelper.makeCheck(this, root, "Low memory warning toast", p.getBoolean(AppState.KEY_MEM_WARN, true));
+        cbLoadDiag = UiHelper.makeCheck(this, root, "Show load diagnostics toast", p.getBoolean(AppState.KEY_LOAD_DIAG, true));
         cbConfirmUnload = UiHelper.makeCheck(this, root, "Confirm before unloading model", p.getBoolean(AppState.KEY_CONFIRM_UNLOAD, false));
 
         root.addView(UiHelper.sectionHeader(this, "DEFAULTS", colorSecondary));
@@ -117,6 +118,7 @@ public class AppSettingsActivity extends Activity {
             .putBoolean(AppState.KEY_TIMESTAMPS, cbTimestamps.isChecked())
             .putBoolean(AppState.KEY_KEEP_SCREEN, cbKeepScreen.isChecked())
             .putBoolean(AppState.KEY_MEM_WARN, cbMemWarn.isChecked())
+            .putBoolean(AppState.KEY_LOAD_DIAG, cbLoadDiag.isChecked())
             .putBoolean(AppState.KEY_CONFIRM_UNLOAD, cbConfirmUnload.isChecked())
             .commit();
     }
